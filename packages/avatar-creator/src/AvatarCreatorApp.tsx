@@ -19,7 +19,7 @@ import Configurator from "./components/Configurator";
 import Logo from "./components/Logo";
 import Mml from "./components/Mml";
 import mmlStyles from "./components/Mml.module.css";
-import MmlButtons from "./components/MmlButtons";
+import { MmlButtons } from "./components/MmlButtons";
 import ProfileBadge from "./components/ProfileBadge";
 import Renderer from "./components/Renderer";
 import { AvatarLoader } from "./scripts/avatar-loader";
@@ -163,6 +163,7 @@ export function AvatarCreatorApp({
       {data && avatarLoader && exportBehavior.mode === "callback" && (
         <div className={mmlStyles.mml}>
           <MmlButtons
+            setOverlayActive={() => {}}
             onExportClick={() => {
               exportBehavior.onExport(avatarLoader.getAvatarMml());
             }}

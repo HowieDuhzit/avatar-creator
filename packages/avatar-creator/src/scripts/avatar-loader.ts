@@ -55,6 +55,11 @@ const slots = [
   "torso",
 ];
 
+const keyReplace = {
+  "top:secondary": "topSecondary",
+  "bottom:secondary": "bottomSecondary",
+};
+
 import idleAnimationGLB from "../assets/anim/idle.glb";
 
 export class AvatarLoader extends EventHandler {
@@ -76,7 +81,8 @@ export class AvatarLoader extends EventHandler {
     }
   >();
 
-  private legs = false;
+  legs = false;
+  preventRandom: boolean = false;
   private torso = false;
 
   private bodyType: CatalogueBodyType = "bodyB";
@@ -188,20 +194,38 @@ export class AvatarLoader extends EventHandler {
 
   /**
    * @param {('bodyB'|'bodyA')} bodyType BodyType for the avatar
+   * @param {boolean} [event] If true, then event will be fired for syncing UI state
    */
-  setBodyType(bodyType: CatalogueBodyType) {
+  setBodyType(bodyType: CatalogueBodyType, event: boolean = false) {
     this.bodyType = bodyType;
     this.loadTorso();
     if (this.legs) this.loadLegs();
+    if (event) this.fire(`slot:bodyType`, this.bodyType);
+  }
+
+  /**
+   * @returns {('bodyB'|'bodyA')}
+   */
+  getBodyType(): "bodyB" | "bodyA" {
+    return this.bodyType;
   }
 
   /**
    * @param {CatalogueSkin} skin A skin from the catalogue
+   * @param {boolean} [event] If true, then event will be fired for syncing UI state
    */
-  setSkin(skin: CatalogueSkin) {
+  setSkin(skin: CatalogueSkin, event: boolean = false) {
     this.skin = skin;
     this.loadTorso();
     if (this.legs) this.loadLegs();
+    if (event) this.fire(`slot:skin`, this.skin);
+  }
+
+  /**
+   * @returns {CatalogueSkin|null}
+   */
+  getSkin(): CatalogueSkin | null {
+    return this.skin;
   }
 
   /**
@@ -311,8 +335,9 @@ export class AvatarLoader extends EventHandler {
    *
    * @param {('head'|'hair'|'top'|'top:secondary'|'bottom'|"bottom:secondary"|'shoes'|'legs'|'torso')} slot Slot to load
    * @param {string} url Full url to GLB file to load for the slot
+   * @param {boolean} [event] If true, then event will be fired for syncing UI state
    */
-  load(slot: string, url: string | null) {
+  load(slot: string, url: string | null, event: boolean = false) {
     // still loading something for the slot
     if (this.loading.has(slot)) {
       const urlNext = this.next.get(slot);
@@ -321,7 +346,7 @@ export class AvatarLoader extends EventHandler {
       if (url !== null && this.loading.get(url) === url) {
         this.next.delete(slot);
       } else {
-        this.next.set(slot, url);
+        if (url) this.next.set(slot, url);
         this.urls[slot] = url;
         this.fire(`loading:${slot}:${url}`);
       }
@@ -337,7 +362,6 @@ export class AvatarLoader extends EventHandler {
       }
 
       delete this.urls[slot];
-
       return;
     }
 
@@ -356,6 +380,15 @@ export class AvatarLoader extends EventHandler {
     asset.ready(() => {
       this.loading.delete(slot);
       this.fire(`loaded:${slot}:${url}`);
+
+      if (event) {
+        this.fire(`slot:${slot}`, url);
+        if (slot.includes(":secondary")) {
+          this.fire(`slot:secondary`, slot, url);
+        } else {
+          this.fire(`slot:basic`, slot, url);
+        }
+      }
 
       this.createRootEntity(asset);
 
@@ -389,7 +422,84 @@ export class AvatarLoader extends EventHandler {
       }
     });
 
+    asset.once("error", () => {
+      this.loading.delete(slot);
+      this.fire(`loaded:${slot}:${url}`);
+
+      this.assets[slot] = asset;
+
+      // @ts-expect-error - PlayCanvas types specify only a number is accepted, but the comment and implementation allow Asset
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+      this.slotEntities[slot].render!.asset = null;
+      // The Asset from GlbContainerResource import misaligns with the "playcanvas" import
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+      this.slotEntities[slot].render!.materialAssets = [];
+
+      this.uncheckBodySlot(slot, url);
+
+      // load next in queue
+      if (this.next.has(slot)) {
+        const urlNext = this.next.get(slot);
+        this.next.delete(slot);
+        if (urlNext) {
+          this.load(slot, urlNext);
+        } else {
+          this.unload(slot);
+        }
+      }
+    });
+
     this.app.assets.load(asset);
+  }
+
+  /**
+   * Loads an GLB file from ObjectURL for provided slot.
+   *
+   * @param {('head'|'hair'|'top'|'top:secondary'|'bottom'|"bottom:secondary"|'shoes'|'legs'|'torso')} slot Slot to load
+   * @param {string} url filename of GLB file to load for the slot
+   * @param {string} objectUrl base64 string containing GLB file providede by URL.createObjectURL from local file
+   */
+  loadCustom(slot: string, url: string, objectUrl: string) {
+    if (this.loading.has(slot)) {
+      return;
+    }
+
+    this.fire(`loading:${slot}:${url}`);
+    this.loading.set(slot, url);
+
+    if (slot === "top") {
+      this.torso = true;
+      this.loadTorso();
+    } else if (slot === "bottom") {
+      this.legs = true;
+      this.loadLegs();
+    }
+
+    // load file using ObjectURL
+    this.app.assets.loadFromUrl(objectUrl, "container", (err, asset) => {
+      if (err) {
+        console.log(err);
+        return;
+      }
+
+      if (!asset) return;
+
+      this.urls[slot] = url;
+
+      this.loading.delete(slot);
+      this.fire(`loaded:${slot}:${url}`);
+
+      this.assets[slot] = asset;
+
+      const container = this.assets[slot].resource as GlbContainerResource;
+
+      // @ts-expect-error - PlayCanvas types specify only a number is accepted, but the comment and implementation allow Asset
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+      this.slotEntities[slot].render!.asset = container.renders[0];
+      // The Asset from GlbContainerResource import misaligns with the "playcanvas" import
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+      this.slotEntities[slot].render!.materialAssets = container.materials as unknown as Asset[];
+    });
   }
 
   /**
@@ -399,18 +509,86 @@ export class AvatarLoader extends EventHandler {
    */
   getAvatarMml(formatted: boolean = false) {
     let code = "";
-    code += `<m-character src="${encodeURI(this.urls.torso ?? "")}">${formatted ? "\n" : ""}`;
+
+    const className = [this.getBodyType(), `skin${this.getSkin()?.name ?? ""}`].join(" ");
+
+    code += `<m-character class="${className}" src="${encodeURI(this.urls.torso ?? "")}">${formatted ? "\n" : ""}`;
 
     for (const key in this.urls) {
       if (key === "torso") continue;
       const url = this.urls[key];
       if (!url) continue;
-      code += `${formatted ? "\t" : ""}<m-model src="${encodeURI(url)}"></m-model>${formatted ? "\n" : ""}`;
+      const className = key in keyReplace ? keyReplace[key as keyof typeof keyReplace] : key;
+      code += `${formatted ? "\t" : ""}<m-model class="${className}" src="${encodeURI(url)}"></m-model>${formatted ? "\n" : ""}`;
     }
 
     code += `</m-character>`;
 
     return code;
+  }
+
+  loadAvatarMml(code: string) {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(code, "text/html");
+    const rootNode = doc.body;
+
+    const character = rootNode.querySelector("m-character");
+    if (!character) {
+      console.log("character not found");
+      return;
+    }
+
+    // body type
+    const bodyTypes = new Set(["bodyA", "bodyB"]);
+    const classItems = Array.from(character.classList);
+    const bodyType =
+      classItems.filter((item) => {
+        return bodyTypes.has(item);
+      })?.[0] ?? "BodyA";
+    this.setBodyType(bodyType as CatalogueBodyType, true);
+
+    // skin
+    classItems.forEach((item) => {
+      if (!item.startsWith("skin")) return;
+
+      const skinIndex = parseInt(item.slice(4), 10);
+      if (isNaN(skinIndex)) return;
+
+      const skinName = (skinIndex + "").padStart(2, "0");
+
+      this.setSkin({ name: skinName, index: skinIndex }, true);
+    });
+
+    this.load("torso", character.getAttribute("src"), true);
+
+    const slots = [
+      "legs",
+      "head",
+      "hair",
+      "top",
+      "topSecondary",
+      "bottom",
+      "bottomSecondary",
+      "shoes",
+    ];
+
+    for (let i = 0; i < slots.length; i++) {
+      const slot = slots[i];
+      const slotName = slot in keyReplace ? keyReplace[slot as keyof typeof keyReplace] : slot;
+      const node = character.querySelector(`m-model.${slot}`);
+      const src = node?.getAttribute("src");
+
+      if (!node || !src) {
+        this.unload(slotName);
+        continue;
+      }
+
+      if (slot === "legs") {
+        this.legs = true;
+      }
+
+      this.load(slotName, src, true);
+    }
   }
 
   /**
