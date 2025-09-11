@@ -10,55 +10,38 @@ import "./index.css";
 
 import { AppBase } from "playcanvas";
 import * as React from "react";
-import { RefObject, useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import styles from "./AvatarCreatorApp.module.css";
 import { CatalogueData } from "./CatalogueData";
 import ButtonCustomize from "./components/ButtonCustomize";
 import Configurator from "./components/Configurator";
 import { Emotes } from "./components/Emotes";
-import Mml from "./components/Mml";
-import mmlStyles from "./components/Mml.module.css";
 import { MmlButtons } from "./components/MmlButtons";
-import ProfileBadge from "./components/ProfileBadge";
 import Renderer from "./components/Renderer";
 import { AvatarLoader } from "./scripts/avatar-loader";
-import { render as renderPortrait } from "./scripts/portrait";
+import { ExportBehavior, ExportBehaviorMode } from "./types/ExportBehavior";
+import { ImportBehavior, ImportBehaviorMode } from "./types/ImportBehavior";
 
-type ExportBehavior =
-  | {
-      mode: "default";
-    }
-  | {
-      mode: "external";
-      getAvatarMmlRef: RefObject<(() => string | null) | null>;
-    }
-  | {
-      mode: "callback";
-      onExport: (avatarMml: string) => void;
-    };
-
-interface AvatarCreatorAppProps {
+type AvatarCreatorAppProps = {
   dataUrl?: string;
   exportBehavior?: ExportBehavior;
+  importBehavior?: ImportBehavior;
   hideProfileBadge?: boolean;
-}
+};
 
 export function AvatarCreatorApp({
   dataUrl = "/data.json",
-  exportBehavior = { mode: "default" },
-  hideProfileBadge = false,
+  exportBehavior = { mode: ExportBehaviorMode.Default },
+  importBehavior = { mode: ImportBehaviorMode.None },
 }: AvatarCreatorAppProps = {}) {
   const [app, setApp] = useState<AppBase | null>(null);
   const [data, setData] = useState<CatalogueData | null>(null);
   const [avatarLoader, setAvatarLoader] = useState<AvatarLoader | null>(null);
-  const [portrait, setPortrait] = useState<string | null>(null);
   const [appState, setAppState] = useState<"home" | "configurator">("home");
   const [isDataLoading, setIsDataLoading] = useState(true);
   const [isAvatarLoading, setIsAvatarLoading] = useState(false);
   const [stats, setStats] = useState("");
-  // TODO - enable saving
-  const enableSave = false;
 
   useEffect(() => {
     const loadData = async () => {
@@ -99,15 +82,6 @@ export function AvatarCreatorApp({
     }
   }, [app, data]);
 
-  const onSave = enableSave
-    ? () => {
-        if (!app) return;
-        renderPortrait(app, (image: string) => {
-          setPortrait(image);
-        });
-      }
-    : undefined;
-
   const getAvatarMml = useCallback(() => {
     if (!avatarLoader) {
       return null;
@@ -116,16 +90,36 @@ export function AvatarCreatorApp({
   }, [avatarLoader]);
 
   useEffect(() => {
-    if (exportBehavior.mode === "external") {
+    if (exportBehavior.mode === ExportBehaviorMode.External) {
       exportBehavior.getAvatarMmlRef.current = getAvatarMml;
     }
 
     return () => {
-      if (exportBehavior.mode === "external") {
+      if (exportBehavior.mode === ExportBehaviorMode.External) {
         exportBehavior.getAvatarMmlRef.current = null;
       }
     };
   }, [exportBehavior, getAvatarMml]);
+
+  const loadAvatarMml = useCallback(
+    (mml: string) => {
+      if (!avatarLoader) return;
+      avatarLoader.loadAvatarMml(mml);
+    },
+    [avatarLoader],
+  );
+
+  useEffect(() => {
+    if (importBehavior.mode === ImportBehaviorMode.External) {
+      importBehavior.importMmlStringRef.current = loadAvatarMml;
+    }
+
+    return () => {
+      if (importBehavior.mode === ImportBehaviorMode.External) {
+        importBehavior.importMmlStringRef.current = null;
+      }
+    };
+  }, [importBehavior, loadAvatarMml]);
 
   const isLoading = isDataLoading || isAvatarLoading;
 
@@ -148,8 +142,6 @@ export function AvatarCreatorApp({
         <ButtonCustomize label="Customize" onStateChange={setAppState} appState={appState} />
       )}
 
-      {hideProfileBadge ? null : <ProfileBadge portrait={portrait} />}
-
       {data && avatarLoader && app && (
         <Configurator
           data={data}
@@ -160,21 +152,14 @@ export function AvatarCreatorApp({
         />
       )}
 
-      {data && avatarLoader && exportBehavior.mode === "default" && (
-        <Mml onSave={onSave} isLoading={isLoading} avatarLoader={avatarLoader} />
-      )}
-
-      {data && avatarLoader && exportBehavior.mode === "callback" && (
-        <div className={mmlStyles.mml}>
-          <MmlButtons
-            setOverlayActive={() => {}}
-            onExportClick={() => {
-              exportBehavior.onExport(avatarLoader.getAvatarMml());
-            }}
-            isLoading={isLoading}
-          />
-        </div>
-      )}
+      {data && avatarLoader ? (
+        <MmlButtons
+          data={data}
+          avatarLoader={avatarLoader}
+          exportBehavior={exportBehavior}
+          importBehavior={importBehavior}
+        />
+      ) : null}
 
       {data && avatarLoader && app && <Emotes data={data} appState={appState} app={app} />}
 
@@ -182,3 +167,5 @@ export function AvatarCreatorApp({
     </div>
   );
 }
+
+export { ExportBehaviorMode, ImportBehaviorMode };
