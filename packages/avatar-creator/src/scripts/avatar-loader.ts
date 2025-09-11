@@ -17,6 +17,7 @@ import {
 } from "playcanvas";
 import type { GlbContainerResource } from "playcanvas/build/playcanvas/src/framework/parsers/glb-container-resource";
 
+import { addAnimationData, AnimGraphData, generateDefaultAnimGraph } from "../AnimGraphData";
 import { CatalogueBodyType, CatalogueData, CatalogueSkin } from "../CatalogueData";
 import { humanFileSize } from "./utils";
 
@@ -64,8 +65,6 @@ const classToSlot = {
   bottomSecondary: "bottom:secondary",
 };
 
-import idleAnimationGLB from "../assets/anim/idle.glb";
-
 // Assets are removed from the cache after 1 seconds
 const ASSET_EXPIRES = 1000;
 
@@ -103,7 +102,8 @@ export class AvatarLoader extends EventHandler {
   private entity: Entity | null = null;
   private slotEntities: { [key: string]: Entity } = {};
   private animTrack: AnimTrack | null = null;
-  private assetAnimIdle: Asset | null = null;
+
+  private animGraphData: AnimGraphData = generateDefaultAnimGraph();
 
   /**
    * @param {AppBase} app PlayCanvas AppBase
@@ -136,6 +136,7 @@ export class AvatarLoader extends EventHandler {
       activate: true,
       speed: 1,
     });
+
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     entity.anim!.rootBone = entity;
 
@@ -160,50 +161,82 @@ export class AvatarLoader extends EventHandler {
       this.entity.addChild(entity);
     }
 
-    this.loadAnimation();
+    if (this.data.animations?.length) {
+      let appearAnimName: string = "";
+
+      // add animation data to anim-graph
+      for (const item of this.data.animations) {
+        const name = item.name;
+
+        if (item.idle) {
+          continue;
+        }
+
+        if (item.appear) {
+          appearAnimName = name;
+        }
+
+        addAnimationData(this.animGraphData, name);
+      }
+
+      // load anim-graph
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+      entity.anim!.loadStateGraph(this.animGraphData);
+
+      // load animations
+      for (const item of this.data.animations) {
+        this.loadAnimation(item.name, item.file);
+      }
+
+      // trigger "appear" animation by default
+      if (appearAnimName) {
+        entity.anim?.setTrigger(appearAnimName);
+      }
+    }
+
+    // listen to global event on app for animation triggers
+    this.app.on("anim", (name) => {
+      // eslint-disable-next-line
+      if (!entity.anim?.parameters.hasOwnProperty(name)) return;
+      entity.anim?.setTrigger(name, true);
+    });
   }
 
   /**
    * @private
    */
-  loadAnimation() {
-    const fileName = "idle.glb";
+  loadAnimation(name: string, url: string) {
+    const fileName = url.split("/").slice(-1)[0];
 
-    this.assetAnimIdle = new Asset(
-      fileName,
-      "container",
-      { url: idleAnimationGLB, filename: fileName },
-      undefined,
-      {
-        // filter out translation from animation,
-        // apart from the root
-        // TODO - this option is untyped in playcanvas
-        animation: {
-          preprocess: (data: {
-            name: string;
-            samplers: Array<{ input: number; output: number }>;
-            channels: Array<{ sampler: number; target: { node: number; path: string } }>;
-          }) => {
-            data.channels = data.channels.filter((item) => {
-              return item.target.node <= 2 || item.target.path === "rotation";
-            });
-          },
+    const asset: Asset = new Asset(fileName, "container", { url, filename: fileName }, undefined, {
+      // filter out translation from animation,
+      // apart from the root
+      // TODO - this option is untyped in playcanvas
+      animation: {
+        preprocess: (data: {
+          name: string;
+          samplers: Array<{ input: number; output: number }>;
+          channels: Array<{ sampler: number; target: { node: number; path: string } }>;
+        }) => {
+          data.channels = data.channels.filter((item) => {
+            return item.target.node <= 2 || item.target.path === "rotation";
+          });
         },
-      } as any,
-    );
+      },
+    } as any);
 
-    this.assetAnimIdle.ready(() => {
+    asset.ready(() => {
       // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-      const animResource = this.assetAnimIdle!.resource as {
+      const animResource = asset!.resource as {
         animations: Array<Asset>;
       };
       this.animTrack = animResource.animations[0].resource as AnimTrack;
       // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-      this.entity!.anim!.assignAnimation("idle", this.animTrack);
+      this.entity!.anim!.assignAnimation(name, this.animTrack);
     });
 
-    this.app.assets.add(this.assetAnimIdle);
-    this.app.assets.load(this.assetAnimIdle);
+    this.app.assets.add(asset);
+    this.app.assets.load(asset);
   }
 
   /**

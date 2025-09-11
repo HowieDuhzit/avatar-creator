@@ -16,6 +16,7 @@ import styles from "./AvatarCreatorApp.module.css";
 import { CatalogueData } from "./CatalogueData";
 import ButtonCustomize from "./components/ButtonCustomize";
 import Configurator from "./components/Configurator";
+import { Emotes } from "./components/Emotes";
 import Mml from "./components/Mml";
 import mmlStyles from "./components/Mml.module.css";
 import { MmlButtons } from "./components/MmlButtons";
@@ -174,6 +175,8 @@ export function AvatarCreatorApp({
           />
         </div>
       )}
+
+      {data && avatarLoader && app && <Emotes data={data} appState={appState} app={app} />}
 
       {avatarLoader && avatarLoader.debugAssets && <pre className={styles.stats}>{stats}</pre>}
     </div>
