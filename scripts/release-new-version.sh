@@ -213,15 +213,16 @@ main() {
     
     print_success "Created tag v$new_version"
     
-    # Publish to npm (if running in CI or if NPM_TOKEN is set)
+    # Publish to npm (if NODE_AUTH_TOKEN or NPM_TOKEN is set).
     if [ -n "$NODE_AUTH_TOKEN" ] || [ -n "$NPM_TOKEN" ]; then
         print_info "Publishing to npm..."
         cd packages/avatar-creator
-        npm publish --registry=https://registry.npmjs.org/ --//registry.npmjs.org/:_authToken=$NODE_AUTH_TOKEN --access public
+        AUTH_TOKEN="${NODE_AUTH_TOKEN:-$NPM_TOKEN}"
+        npm publish --registry=https://registry.npmjs.org/ --//registry.npmjs.org/:_authToken="$AUTH_TOKEN" --access public
         cd ../..
         print_success "Published $PACKAGE_NAME@$new_version to npm"
     else
-        print_warning "NPM_TOKEN not set. Skipping npm publish. Run 'npm publish --access public' manually from packages/avatar-creator/"
+        print_warning "NODE_AUTH_TOKEN or NPM_TOKEN not set. Skipping npm publish. Run 'npm publish --access public' manually from packages/avatar-creator/"
     fi
     
     print_success "🎉 Release process completed successfully!"
