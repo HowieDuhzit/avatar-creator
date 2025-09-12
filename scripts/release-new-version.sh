@@ -215,6 +215,8 @@ main() {
     
     # Publish to npm (if running in CI or if NPM_TOKEN is set)
     if [ -n "$NODE_AUTH_TOKEN" ] || [ -n "$NPM_TOKEN" ]; then
+        npm whoami --registry=https://registry.npmjs.org/ --//registry.npmjs.org/:_authToken=$NODE_AUTH_TOKEN
+
         print_info "Publishing to npm..."
         cd packages/avatar-creator
         npm publish --access public
