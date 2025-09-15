@@ -92,9 +92,9 @@ export class AvatarLoader extends EventHandler {
     }
   >();
 
-  legs = false;
+  legs = true;
   preventRandom: boolean = false;
-  private torso = false;
+  private torso = true;
 
   private bodyType: CatalogueBodyType = "bodyB";
   private skin: CatalogueSkin | null = null;
@@ -338,16 +338,22 @@ export class AvatarLoader extends EventHandler {
    * @param {string} url
    * @private
    */
-  checkBodySlot(slot: string, url: string) {
+  checkBodySlot(slot: string, url: string | null) {
     if (slot === "top") {
-      if (this.index.get(url)?.torso) {
+      if (!this.urls[slot]) {
+        this.torso = true;
+        this.loadTorso();
+      } else if (!url || this.index.get(url)?.torso) {
         this.torso = true;
         this.loadTorso();
       } else {
         this.torso = false;
       }
     } else if (slot === "bottom") {
-      if (this.index.get(url)?.legs) {
+      if (!this.urls[slot]) {
+        this.legs = true;
+        this.loadLegs();
+      } else if (!url || this.index.get(url)?.legs) {
         this.legs = true;
         this.loadLegs();
       } else {
@@ -363,12 +369,12 @@ export class AvatarLoader extends EventHandler {
    */
   uncheckBodySlot(slot: string, url: string) {
     if (slot === "top") {
-      if (!this.index.get(url)?.torso) {
+      if (!this.index.get(url)?.torso && this.urls[slot]) {
         this.torso = false;
         this.loadTorso();
       }
     } else if (slot === "bottom") {
-      if (!this.index.get(url)?.legs) {
+      if (!this.index.get(url)?.legs && this.urls[slot]) {
         this.legs = false;
         this.unload("legs");
       }
@@ -409,6 +415,9 @@ export class AvatarLoader extends EventHandler {
       }
 
       delete this.urls[slot];
+
+      this.checkBodySlot(slot, url);
+
       return;
     }
 

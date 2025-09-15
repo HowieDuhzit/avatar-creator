@@ -58,7 +58,7 @@ export default function Configurator({
   const [bottomSecondary, setBottomSecondary] = useState<string | null>(null);
   const [shoes, setShoes] = useState<string | null>(null);
 
-  const setters: Record<CataloguePartsKeys, (file: string) => void> = {
+  const setters: Record<CataloguePartsKeys, (file: string | null) => void> = {
     head: setHead,
     hair: setHair,
     top: setTop,
@@ -77,6 +77,11 @@ export default function Configurator({
 
   const randomSlot = (slot: CataloguePartsKeys) => {
     const list = data.bodyTypes[bodyType][slot].list;
+    if (!list.length) {
+      setters[slot](null);
+      return;
+    }
+
     const item = list[Math.floor(Math.random() * list.length)];
     let url = item.file;
     if (slot === "head") {
@@ -87,6 +92,11 @@ export default function Configurator({
     if (settersSecondary[slot]) {
       settersSecondary[slot](item.secondary ?? null);
     }
+  };
+
+  const slotHasItems = (bodyType: CatalogueBodyType, slot: CataloguePartsKeys) => {
+    const slotData = data.bodyTypes[bodyType][slot];
+    return !!slotData?.list && slotData.list.length > 1;
   };
 
   useEffect(() => {
@@ -335,41 +345,51 @@ export default function Configurator({
             active={section === "bodyType"}
             dropOver={sectionDropOver}
           />
-          <SectionButton
-            slot="head"
-            setSection={setSection}
-            droppable={false}
-            active={section === "head"}
-            dropOver={sectionDropOver}
-          />
-          <SectionButton
-            slot="hair"
-            setSection={setSection}
-            droppable={false}
-            active={section === "hair"}
-            dropOver={sectionDropOver}
-          />
-          <SectionButton
-            slot="top"
-            setSection={setSection}
-            droppable={true}
-            active={section === "top"}
-            dropOver={sectionDropOver}
-          />
-          <SectionButton
-            slot="bottom"
-            setSection={setSection}
-            droppable={true}
-            active={section === "bottom"}
-            dropOver={sectionDropOver}
-          />
-          <SectionButton
-            slot="shoes"
-            setSection={setSection}
-            droppable={true}
-            active={section === "shoes"}
-            dropOver={sectionDropOver}
-          />
+          {slotHasItems(bodyType, "head") && (
+            <SectionButton
+              slot="head"
+              setSection={setSection}
+              droppable={false}
+              active={section === "head"}
+              dropOver={sectionDropOver}
+            />
+          )}
+          {slotHasItems(bodyType, "hair") && (
+            <SectionButton
+              slot="hair"
+              setSection={setSection}
+              droppable={false}
+              active={section === "hair"}
+              dropOver={sectionDropOver}
+            />
+          )}
+          {slotHasItems(bodyType, "top") && (
+            <SectionButton
+              slot="top"
+              setSection={setSection}
+              droppable={true}
+              active={section === "top"}
+              dropOver={sectionDropOver}
+            />
+          )}
+          {slotHasItems(bodyType, "bottom") && (
+            <SectionButton
+              slot="bottom"
+              setSection={setSection}
+              droppable={true}
+              active={section === "bottom"}
+              dropOver={sectionDropOver}
+            />
+          )}
+          {slotHasItems(bodyType, "shoes") && (
+            <SectionButton
+              slot="shoes"
+              setSection={setSection}
+              droppable={true}
+              active={section === "shoes"}
+              dropOver={sectionDropOver}
+            />
+          )}
         </ul>
 
         <div
