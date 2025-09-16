@@ -93,7 +93,7 @@ For more information on how to release new versions see the [release docs](./doc
 See [examples/avatar-preview-app/public/data.json](examples/avatar-preview-app/public/data.json)
 
 This specific project implements a static JSON data containing multiple body types, skin colors and
-various slot models: `body`, `head`, `hair`, `top`, `bottom`, `shoes`. As well as list of
+various slot models: `body`, `head`, `hair`, `top`, `bottom`, `shoes`, `outfit`. As well as list of
 animations.
 
 All files must be paired: `.glb` for 3D models and `.webp` for thumbnails, sharing the same filename
@@ -134,6 +134,8 @@ model in the data, and the app will append \_01 to \_07 based on the selected sk
 
 - **Shoes** - is a simple slot.
 
+- **Outfit** - a "complete" slot that will hide all the other slots and have a full-body unique model.
+
 ## Hosting Assets
 
 This project includes model and thumbnail assets for testing. In production, host these on a
@@ -156,9 +158,10 @@ from the UI.
 
 For production of assets, there a few recommendations and guidelines as well as templates to follow:
 
-- [Clothes](./docs/clothes.md)
-- _TODO_ - Faces
-- _TODO_ - Hair
+* [Clothes](./docs/clothes.md)
+* _TODO_ - Faces
+* _TODO_ - Hair
+* _TODO_ - Outfits
 
 ---
 

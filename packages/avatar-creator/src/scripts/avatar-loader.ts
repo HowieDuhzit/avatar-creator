@@ -14,6 +14,7 @@ import {
   Entity,
   EventHandler,
   GraphNode,
+  StandardMaterial,
 } from "playcanvas";
 import type { GlbContainerResource } from "playcanvas/build/playcanvas/src/framework/parsers/glb-container-resource";
 
@@ -53,6 +54,7 @@ const slots = [
   "shoes",
   "legs",
   "torso",
+  "outfit",
 ];
 
 const slotToClass = {
@@ -94,7 +96,7 @@ export class AvatarLoader extends EventHandler {
 
   legs = true;
   preventRandom: boolean = false;
-  private torso = true;
+  torso = true;
 
   private bodyType: CatalogueBodyType = "bodyB";
   private skin: CatalogueSkin | null = null;
@@ -200,6 +202,10 @@ export class AvatarLoader extends EventHandler {
       if (!entity.anim?.parameters.hasOwnProperty(name)) return;
       entity.anim?.setTrigger(name, true);
     });
+  }
+
+  has(slot: string) {
+    return !!this.urls[slot];
   }
 
   /**
@@ -386,7 +392,7 @@ export class AvatarLoader extends EventHandler {
    * If it is a first slot to be loaded, then it will use that model's skeleton for the base hierarchy
    * It will automatically hide/show different body parts, based on slot params
    *
-   * @param {('head'|'hair'|'top'|'top:secondary'|'bottom'|"bottom:secondary"|'shoes'|'legs'|'torso')} slot Slot to load
+   * @param {('head'|'hair'|'top'|'top:secondary'|'bottom'|"bottom:secondary"|'shoes'|'legs'|'torso'|'outfit')} slot Slot to load
    * @param {string} url Full url to GLB file to load for the slot
    * @param {boolean} [event] If true, then event will be fired for syncing UI state
    */
@@ -416,7 +422,7 @@ export class AvatarLoader extends EventHandler {
 
       delete this.urls[slot];
 
-      this.checkBodySlot(slot, url);
+      if (!this.urls["outfit"]) this.checkBodySlot(slot, url);
 
       return;
     }
@@ -474,6 +480,23 @@ export class AvatarLoader extends EventHandler {
       // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       this.slotEntities[slot].render!.materialAssets = container.materials as unknown as Asset[];
 
+      // patch emissive color
+      const meshInstances = this.slotEntities[slot].render?.meshInstances;
+      if (meshInstances) {
+        for (let i = 0; i < meshInstances.length; i++) {
+          const material = meshInstances[i].material as StandardMaterial;
+          if (
+            material.emissiveMap &&
+            material.emissive.r <= 1 &&
+            material.emissive.g <= 1 &&
+            material.emissive.b <= 1
+          ) {
+            material.emissive.set(1, 1, 1, 1);
+            material.emissiveIntensity = 5;
+          }
+        }
+      }
+
       this.uncheckBodySlot(slot, url);
 
       // load next in queue
@@ -523,7 +546,7 @@ export class AvatarLoader extends EventHandler {
   /**
    * Loads an GLB file from ObjectURL for provided slot.
    *
-   * @param {('head'|'hair'|'top'|'top:secondary'|'bottom'|"bottom:secondary"|'shoes'|'legs'|'torso')} slot Slot to load
+   * @param {('head'|'hair'|'top'|'top:secondary'|'bottom'|"bottom:secondary"|'shoes'|'legs'|'torso'|'outfit')} slot Slot to load
    * @param {string} url filename of GLB file to load for the slot
    * @param {string} objectUrl base64 string containing GLB file providede by URL.createObjectURL from local file
    */
@@ -578,12 +601,15 @@ export class AvatarLoader extends EventHandler {
   getAvatarMml(formatted: boolean = false) {
     let code = "";
 
-    const className = [this.getBodyType(), `skin${this.getSkin()?.name ?? ""}`].join(" ");
+    const outfit = this.urls.outfit ?? "";
+    const className = outfit
+      ? "outfit"
+      : [this.getBodyType(), `skin${this.getSkin()?.name ?? ""}`].join(" ");
 
-    code += `<m-character class="${className}" src="${encodeURI(this.urls.torso ?? "")}">${formatted ? "\n" : ""}`;
+    code += `<m-character class="${className}" src="${encodeURI(outfit || (this.urls.torso ?? ""))}">${formatted ? "\n" : ""}`;
 
     for (const key in this.urls) {
-      if (key === "torso") continue;
+      if (key === "torso" || key === "outfit") continue;
       const url = this.urls[key];
       if (!url) continue;
       const className = key in slotToClass ? slotToClass[key as keyof typeof slotToClass] : key;
@@ -610,56 +636,84 @@ export class AvatarLoader extends EventHandler {
       return;
     }
 
-    // body type
-    const bodyTypes = new Set(["bodyA", "bodyB"]);
     const classItems = Array.from(character.classList);
-    const bodyType =
-      classItems.filter((item) => {
-        return bodyTypes.has(item);
-      })?.[0] ?? "BodyA";
-    this.setBodyType(bodyType as CatalogueBodyType, true);
+    const outfit = classItems.includes("outfit");
 
-    // skin
-    classItems.forEach((item) => {
-      if (!item.startsWith("skin")) return;
+    if (outfit) {
+      const slots = [
+        "torso",
+        "legs",
+        "head",
+        "hair",
+        "top",
+        "topSecondary",
+        "bottom",
+        "bottomSecondary",
+        "shoes",
+      ];
 
-      const skinIndex = parseInt(item.slice(4), 10);
-      if (isNaN(skinIndex)) return;
+      this.torso = false;
+      this.legs = false;
 
-      const skinName = (skinIndex + "").padStart(2, "0");
-
-      this.setSkin({ name: skinName, index: skinIndex }, true);
-    });
-
-    this.load("torso", character.getAttribute("src"), true);
-
-    const slots = [
-      "legs",
-      "head",
-      "hair",
-      "top",
-      "topSecondary",
-      "bottom",
-      "bottomSecondary",
-      "shoes",
-    ];
-
-    for (let i = 0; i < slots.length; i++) {
-      const slot = slots[i];
-      const slotName = slot in classToSlot ? classToSlot[slot as keyof typeof classToSlot] : slot;
-      const node = character.querySelector(`m-model.${slot}`);
-      const src = node?.getAttribute("src");
-
-      if (!node || !src) {
+      for (let i = 0; i < slots.length; i++) {
+        const slot = slots[i];
+        const slotName = slot in classToSlot ? classToSlot[slot as keyof typeof classToSlot] : slot;
         this.unload(slotName);
-        continue;
       }
 
-      if (slot === "legs") {
-        this.legs = true;
-      }
+      const src = character.getAttribute("src");
+      this.load("outfit", src, true);
+    } else {
+      // body type
+      const bodyTypes = new Set(["bodyA", "bodyB"]);
+      const bodyType =
+        classItems.filter((item) => {
+          return bodyTypes.has(item);
+        })?.[0] ?? "BodyA";
+      this.setBodyType(bodyType as CatalogueBodyType, true);
 
-      this.load(slotName, src, true);
+      // skin
+      classItems.forEach((item) => {
+        if (!item.startsWith("skin")) return;
+
+        const skinIndex = parseInt(item.slice(4), 10);
+        if (isNaN(skinIndex)) return;
+
+        const skinName = (skinIndex + "").padStart(2, "0");
+
+        this.setSkin({ name: skinName, index: skinIndex }, true);
+      });
+
+      this.load("torso", character.getAttribute("src"), true);
+
+      const slots = [
+        "legs",
+        "head",
+        "hair",
+        "top",
+        "topSecondary",
+        "bottom",
+        "bottomSecondary",
+        "shoes",
+      ];
+
+      for (let i = 0; i < slots.length; i++) {
+        const slot = slots[i];
+        const slotName = slot in classToSlot ? classToSlot[slot as keyof typeof classToSlot] : slot;
+        const node = character.querySelector(`m-model.${slot}`);
+        const src = node?.getAttribute("src");
+
+        if (!node || !src) {
+          this.unload(slotName);
+          continue;
+        }
+
+        if (slot === "legs") {
+          this.legs = true;
+        }
+
+        this.load(slotName, src, true);
+      }
     }
   }
 
@@ -672,10 +726,12 @@ export class AvatarLoader extends EventHandler {
       return;
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-    this.slotEntities[slot].render!.asset = 0;
-    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-    this.slotEntities[slot].render!.materialAssets = [];
+    if (this.slotEntities[slot]) {
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+      this.slotEntities[slot].render!.asset = 0;
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+      this.slotEntities[slot].render!.materialAssets = [];
+    }
 
     delete this.urls[slot];
   }
