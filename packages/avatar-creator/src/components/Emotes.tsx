@@ -10,15 +10,15 @@ import { AppBase } from "playcanvas";
 import * as React from "react";
 import { useState } from "react";
 
-import { CatalogueData } from "../CatalogueData";
+import { AnimationData, AnimationType } from "../AnimationData";
 import styles from "./Emotes.module.css";
 
 export function Emotes({
-  data,
+  animations,
   appState,
   app,
 }: {
-  data: CatalogueData;
+  animations: AnimationData;
   app: AppBase;
   appState: "home" | "configurator";
 }) {
@@ -32,7 +32,7 @@ export function Emotes({
   };
 
   // count how many emote animations are available
-  const emotesCount = data.animations?.filter((item) => {
+  const emotesCount = animations?.filter((item) => {
     return !!item.emote;
   })?.length;
 
@@ -45,8 +45,8 @@ export function Emotes({
     <div
       className={`${styles.emotes} ${active || emotesCount === 1 ? styles.active : ""} ${appState === "home" ? "" : styles.hidden}`}
     >
-      {data.animations.map((item) => {
-        if (item.idle) {
+      {animations.map((item) => {
+        if (item.type === AnimationType.Idle) {
           return null;
         }
 

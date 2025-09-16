@@ -18,6 +18,7 @@ import {
 } from "playcanvas";
 import type { GlbContainerResource } from "playcanvas/build/playcanvas/src/framework/parsers/glb-container-resource";
 
+import { AnimationData, AnimationType } from "../AnimationData";
 import { addAnimationData, AnimGraphData, generateDefaultAnimGraph } from "../AnimGraphData";
 import { CatalogueBodyType, CatalogueData, CatalogueSkin } from "../CatalogueData";
 import { humanFileSize } from "./utils";
@@ -114,6 +115,7 @@ export class AvatarLoader extends EventHandler {
   constructor(
     public app: AppBase,
     public data: CatalogueData,
+    public animations: AnimationData,
   ) {
     super();
 
@@ -163,18 +165,18 @@ export class AvatarLoader extends EventHandler {
       this.entity.addChild(entity);
     }
 
-    if (this.data.animations?.length) {
+    if (this.animations?.length) {
       let appearAnimName: string = "";
 
       // add animation data to anim-graph
-      for (const item of this.data.animations) {
+      for (const item of this.animations) {
         const name = item.name;
 
-        if (item.idle) {
+        if (item.type === AnimationType.Idle) {
           continue;
         }
 
-        if (item.appear) {
+        if (item.type === AnimationType.Appear) {
           appearAnimName = name;
         }
 
@@ -186,7 +188,7 @@ export class AvatarLoader extends EventHandler {
       entity.anim!.loadStateGraph(this.animGraphData);
 
       // load animations
-      for (const item of this.data.animations) {
+      for (const item of this.animations) {
         this.loadAnimation(item.name, item.file);
       }
 
