@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  avatar-creator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - SERVICE_FQDN_AVATAR_CREATOR_3000
+    volumes:
+      - avatar-assets:/app/examples/avatar-preview-app/public/parts
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+
+volumes:
+  avatar-assets:
+    driver: local
